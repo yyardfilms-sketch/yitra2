@@ -129,7 +129,7 @@ textarea.inp{resize:vertical;min-height:70px}
 .banner .chip{background:rgba(255,255,255,.18);border-radius:999px;padding:6px 12px;font-size:12px;font-weight:600;color:#fff}
 
 /* ---------- tx rows ---------- */
-.tx{display:flex;align-items:center;gap:11px;background:#fff;border-radius:16px;padding:11px 13px;margin-bottom:8px}
+.tx{display:flex;align-items:center;gap:11px;background:#fff;border-radius:16px;padding:11px 13px;margin-bottom:8px;color:var(--ink)}
 .tx .ic{width:42px;height:42px;border-radius:50%;background:var(--p-soft);display:grid;place-items:center;font-size:19px;flex:none}
 .tx .t{font-weight:600;font-size:15px}
 .tx .c{font-size:12px;color:var(--muted)}
@@ -559,15 +559,25 @@ function sum(arr) { return arr.reduce((a, t) => a + num(t.amount), 0); }
 function spendIn(from, to) { return sum(txIn(from, to, 'expense').filter(t => !t.excluded)); }
 function incomeIn(from, to) { return sum(txIn(from, to, 'income').filter(t => !t.excluded)); }
 
+/** תזוזת הכסף נטו בין שני תאריכים (כולל העברות לחיסכון) */
+function netBetween(a, b) {
+  let n = 0;
+  for (const t of S.tx) {
+    if (t.date < a || t.date > b) continue;
+    n += (t.type === 'income' ? 1 : -1) * num(t.amount);
+  }
+  return n;
+}
 /** היתרה המתגלגלת — נכון לסוף התאריך שנמסר */
 function balanceAsOf(iso) {
-  const o = S.settings.openingDate;
-  let b = num(S.settings.openingBalance);
-  for (const t of S.tx) {
-    if (t.date < o || t.date > iso) continue;
-    b += (t.type === 'income' ? 1 : -1) * num(t.amount);
-  }
-  return b;
+  return num(S.settings.openingBalance) + netBetween(S.settings.openingDate, iso);
+}
+/** נקודת העיגון תמיד יושבת בתחילת מחזור, אחרת היתרה וההוצאות לא מסתדרות */
+function reanchor(balanceNow) {
+  const cs = cycleStartISO(todayISO());
+  const want = (balanceNow == null) ? balanceAsOf(todayISO()) : balanceNow;
+  S.settings.openingDate = cs;
+  S.settings.openingBalance = want - netBetween(cs, todayISO());
 }
 function savingsTotal() {
   let b = 0;
@@ -1255,15 +1265,18 @@ function moveSaving(id, dir) {
     '<button class="btn mt" data-domove="' + id + '" data-dir="' + dir + '">אישור</button>');
 }
 function openSettings() {
-  const s = S.settings;
+  const s = S.settings, od = fromISO(s.openingDate);
   openSheet('<h3>הגדרות</h3>' +
     '<div class="field"><label>השם שלי</label><input class="inp" id="st-name" value="' + esc(s.name) + '"></div>' +
     '<div class="field"><label>המחזור החודשי מתחיל ביום</label>' +
     '<input class="inp" id="st-day" type="number" min="1" max="28" value="' + s.cycleStartDay + '">' +
     '<div class="tiny muted mt-s">10 = כל חודש מתחיל ב-10 ונגמר ב-9 של החודש הבא.</div></div>' +
-    '<div class="field"><label>יתרת פתיחה (₪)</label><input class="inp" id="st-bal" type="number" value="' + num(s.openingBalance) + '">' +
-    '<div class="tiny muted mt-s">מה היה בחשבון בתאריך שלמטה. מכאן היתרה מתגלגלת לבד קדימה.</div></div>' +
-    '<div class="field"><label>נכון לתאריך</label><input class="inp" id="st-date" type="date" value="' + s.openingDate + '"></div>' +
+    '<div class="field"><label>כמה יש בחשבון עכשיו? (₪)</label>' +
+    '<input class="inp" id="st-bal" type="number" value="' + Math.round(balanceAsOf(todayISO())) + '">' +
+    '<div class="tiny muted mt-s">תסתכל בבנק ותכתוב את המספר. האפליקציה תחשב אחורה כמה היה לך בתחילת המחזור, ' +
+    'ומשם היתרה מתגלגלת לבד. שווה לעדכן את זה כל כמה שבועות.</div></div>' +
+    '<div class="sm muted">נקודת עיגון נוכחית: <b class="num">' + money(num(s.openingBalance)) + '</b> ב-' +
+    p2(od.getDate()) + '/' + p2(od.getMonth() + 1) + '/' + od.getFullYear() + '</div>' +
     '<button class="btn mt" data-act="saveSettings">שמירה</button>');
 }
 function openBackup() {
@@ -1484,8 +1497,7 @@ document.addEventListener('click', e => {
   if (d.act === 'saveSettings') {
     S.settings.name = ($('#st-name').value || '').trim();
     S.settings.cycleStartDay = Math.min(28, Math.max(1, num($('#st-day').value) || 1));
-    S.settings.openingBalance = num($('#st-bal').value);
-    S.settings.openingDate = $('#st-date').value || todayISO();
+    reanchor(num($('#st-bal').value));
     save(); closeSheet(); render(); toast('נשמר'); return;
   }
   if (d.act === 'dlBackup') { download('hayitra-backup-' + todayISO() + '.json', JSON.stringify(S)); return; }
@@ -1520,6 +1532,7 @@ function boot() {
     const key = seg.dataset.seg, v = S.settings[key];
     Array.from(seg.children).forEach(b => b.classList.toggle('on', b.dataset.v === v));
   });
+  if (S.settings.openingDate !== cycleStartISO(S.settings.openingDate)) { reanchor(); save(); }
   const added = runRecurring();
   go('home');
   if (added) toast(added + ' תנועות קבועות נרשמו');
@@ -1529,7 +1542,6 @@ function boot() {
       '<div class="field"><label>המחזור החודשי מתחיל ביום</label><input class="inp" id="st-day" type="number" value="10">' +
       '<div class="tiny muted mt-s">המשכורת נכנסת ב-10? השאר 10.</div></div>' +
       '<div class="field"><label>כמה יש בחשבון עכשיו? (₪)</label><input class="inp" id="st-bal" type="number" placeholder="0"></div>' +
-      '<input type="hidden" id="st-date" value="' + todayISO() + '">' +
       '<button class="btn mt" data-act="saveSettings">יוצאים לדרך</button>'), 400);
   }
 }
