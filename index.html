@@ -135,6 +135,14 @@ textarea.inp{resize:vertical;min-height:70px}
 .tx .c{font-size:12px;color:var(--muted)}
 .tx .a{text-align:left;font-weight:800;font-size:16px;white-space:nowrap}
 .tx .d{font-size:11.5px;color:var(--muted);text-align:left;margin-top:1px}
+.tx.soon{background:#fff;box-shadow:inset 0 0 0 1.5px var(--p-line);opacity:.85}
+.tx .tag{display:inline-block;font-size:10px;font-weight:700;color:var(--p);background:var(--p-soft);
+  border-radius:999px;padding:1px 7px;margin-inline-start:5px;vertical-align:1px}
+.cycnav{display:flex;align-items:center;gap:2px}
+.cycnav .arw{width:32px;height:32px;border-radius:50%;background:var(--p-soft);color:var(--p);
+  font-size:19px;font-weight:700;display:grid;place-items:center;line-height:1}
+.cycnav .arw:disabled{opacity:.3}
+.cycnav .lab{font-size:13px;font-weight:700;color:var(--p2);padding:0 8px;min-width:64px;text-align:center}
 .daysep{display:flex;align-items:center;gap:10px;margin:16px 2px 8px;font-size:12px;color:var(--muted)}
 .daysep .ln{flex:1;border-top:1px dashed var(--line)}
 
@@ -196,11 +204,15 @@ textarea.inp{resize:vertical;min-height:70px}
 .full .body{flex:1;overflow-y:auto;padding:46px 16px 20px}
 .full .hero{position:absolute;bottom:-29px;inset-inline-start:16px;inset-inline-end:16px;
   background:#fff;border-radius:999px;box-shadow:0 6px 18px rgba(30,25,80,.12);padding:4px 8px;display:flex;align-items:center;gap:6px}
-.full .hero input{flex:1;border:none;padding:14px 12px;font-size:19px;font-weight:600;text-align:center;background:transparent;min-width:0}
+.full .hero{color:var(--ink)}
+.full .hero input{flex:1;border:none;padding:14px 12px;font-size:19px;font-weight:600;text-align:center;
+  background:transparent;min-width:0;color:var(--ink);caret-color:var(--p)}
+.full .hero input:focus,.full .hero input:focus-visible{outline:none}
+.full .hero:focus-within{box-shadow:0 6px 18px rgba(30,25,80,.12),0 0 0 2px var(--p-line)}
 .full .hero input::placeholder{color:#B9B9CB;font-weight:600}
 .full .foot{flex:none;padding:12px 16px calc(14px + env(safe-area-inset-bottom));background:var(--bg)}
 .chips{display:flex;flex-wrap:wrap;gap:8px}
-.chips .pill{background:#fff}
+.chips .pill:not(.on){background:#fff}
 .toggle{width:50px;height:29px;border-radius:999px;background:#DCDCE7;position:relative;flex:none;transition:.2s}
 .toggle i{position:absolute;top:3px;inset-inline-end:3px;width:23px;height:23px;border-radius:50%;background:#fff;transition:.2s;
   box-shadow:0 1px 3px rgba(0,0,0,.2)}
@@ -238,22 +250,34 @@ textarea.inp{resize:vertical;min-height:70px}
         <div class="avatar" id="h-avatar">י</div>
         <div class="hello" id="h-hello"></div>
       </div>
-      <div class="seg" data-seg="homePeriod">
-        <button data-v="cycle" class="on">החודש</button>
-        <button data-v="week">השבוע</button>
+      <div class="cycnav">
+        <button class="arw" data-cyc="-1">›</button>
+        <button class="lab" id="h-cyclab" data-cyc="0">—</button>
+        <button class="arw" data-cyc="1">‹</button>
       </div>
     </div>
 
     <div class="balance">
-      <div class="lab">היתרה שלי</div>
+      <div class="lab" id="h-bal-lab">היתרה שלי</div>
       <div class="big num" id="h-balance" data-cnt>0 ₪</div>
       <div class="sub" id="h-carry"></div>
+    </div>
+
+    <div class="card mt" id="h-bank" style="padding:14px 16px">
+      <div class="between"><div><div class="b" style="font-size:14px">צפוי בבנק</div>
+        <div class="tiny muted">היתרה + אשראי שטרם חויב</div></div>
+        <b class="num" style="font-size:22px" id="h-bankbal" data-cnt>0 ₪</b></div>
+      <div class="between" style="margin-top:11px;padding-top:11px;border-top:1px solid var(--line)">
+        <div><div class="b" style="font-size:14px" id="h-due-lab">יירד בחיוב הקרוב</div>
+        <div class="tiny muted" id="h-due-sub"></div></div>
+        <b class="num" style="font-size:22px;color:var(--p)" id="h-due" data-cnt>0 ₪</b></div>
     </div>
 
     <div class="duo">
       <div class="card"><div class="k">הוצאות</div><div class="v num neg" id="h-out" data-cnt>0 ₪</div><div class="tiny muted" id="h-out-lab"></div></div>
       <div class="card"><div class="k">הכנסות</div><div class="v num pos" id="h-in" data-cnt>0 ₪</div><div class="tiny muted" id="h-in-lab"></div></div>
     </div>
+    <div class="tiny muted center mt-s" id="h-note"></div>
 
     <div class="mt">
       <div class="between" style="margin-bottom:10px">
@@ -264,7 +288,7 @@ textarea.inp{resize:vertical;min-height:70px}
     </div>
 
     <div class="banner">
-      <div class="between"><h3>ההוצאות האחרונות שלי</h3><button class="chip" data-go="tx">הצג עוד</button></div>
+      <div class="between"><h3 id="h-recent-lab">ההוצאות האחרונות שלי</h3><button class="chip" data-go="tx">הצג עוד</button></div>
       <div id="h-recent"></div>
     </div>
   </section>
@@ -372,7 +396,8 @@ textarea.inp{resize:vertical;min-height:70px}
       <div id="p-cycles"></div>
     </div>
 
-    <button class="btn line mt" data-act="export">📄 ייצוא לאקסל (CSV)</button>
+    <button class="btn line mt" id="p-review" data-act="review">💳 שיוך אמצעי תשלום</button>
+    <button class="btn line mt-s" data-act="export">📄 ייצוא לאקסל (CSV)</button>
     <button class="btn line mt-s" data-act="backup">💾 גיבוי / שחזור נתונים</button>
   </section>
 
@@ -449,7 +474,10 @@ function seed() {
   return {
     settings: {
       name: '',
-      cycleStartDay: 10,          // המחזור החודשי מתחיל ביום הזה
+      cycleStartDay: 10,          // המחזור התקציבי מתחיל ביום הזה
+      ccCloseDay: 8,              // יום סגירת מחזור האשראי
+      ccChargeDay: 10,            // יום החיוב בבנק
+      filterSrc: '',
       openingBalance: 0,          // היתרה נכון לתאריך שלמטה
       openingDate: cycleStartISO(todayISO(), 10),
       createdAt: todayISO(),
@@ -493,6 +521,16 @@ function save() {
   try { localStorage.setItem(LS, JSON.stringify(S)); }
   catch (e) { toast('אין מקום לשמור — פנה מקום בדפדפן'); }
 }
+
+/* ---------------- מקורות תשלום ---------------- */
+const SRC = {
+  credit: { n: 'אשראי',  e: '💳', s: 'כרטיס ב׳ — מחויב ב-10' },
+  debit:  { n: 'דביט',   e: '⚡', s: 'כרטיס א׳ — יורד מיד' },
+  bank:   { n: 'עו״ש',   e: '🏦', s: 'העברה / הוראת קבע' },
+  cash:   { n: 'מזומן',  e: '💵', s: '' }
+};
+const SRC_KEYS = ['credit', 'debit', 'bank', 'cash'];
+function srcName(k) { return (SRC[k] || SRC.bank).n; }
 
 /* ---------------- תאריכים ---------------- */
 function todayISO() { return toISO(new Date()); }
@@ -539,6 +577,52 @@ function rangeFor(period) {
   if (period === 'all')  return { from: '0000-01-01', to: '9999-12-31', label: 'הכל' };
   return { from: cycleStartISO(t), to: cycleEndISO(t), label: cycleLabel(t) };
 }
+
+/* ---------------- מחזור האשראי ---------------- */
+/** באיזה תאריך העסקה הזו תרד בפועל מהבנק */
+function chargeDate(t) {
+  if (!t || t.src !== 'credit') return t ? t.date : null;
+  const d = fromISO(t.date);
+  let y = d.getFullYear(), m = d.getMonth();
+  if (d.getDate() > S.settings.ccCloseDay) m++;
+  m += num(t.ccShift || 0);
+  const x = new Date(y, m, 1);
+  x.setDate(Math.min(S.settings.ccChargeDay, dim(x.getFullYear(), x.getMonth())));
+  return toISO(x);
+}
+/** עסקה שנפלה על התפר — הבנק יכול לשייך אותה לכאן או לשם */
+function isBorderline(t) {
+  if (!t || t.src !== 'credit') return false;
+  const dd = fromISO(t.date).getDate(), c = S.settings.ccCloseDay;
+  return dd >= c - 1 && dd <= c + 1;
+}
+/** לאיזה כיוון אפשר להזיז עסקה גבולית */
+function altShift(t) { return fromISO(t.date).getDate() <= S.settings.ccCloseDay ? 1 : -1; }
+
+/** תאריך החיוב הקרוב */
+function nextChargeDate() {
+  const d = fromISO(todayISO());
+  let y = d.getFullYear(), m = d.getMonth();
+  if (d.getDate() > S.settings.ccChargeDay) m++;
+  const x = new Date(y, m, 1);
+  x.setDate(Math.min(S.settings.ccChargeDay, dim(x.getFullYear(), x.getMonth())));
+  return toISO(x);
+}
+/** אשראי שכבר ירד מהיתרה שלי אבל עוד לא ירד מהבנק */
+function pendingCredit() {
+  const t = todayISO(), o = S.settings.openingDate;
+  return S.tx.filter(x => x.type === 'expense' && x.src === 'credit' &&
+    x.date >= o && x.date <= t && chargeDate(x) > t).reduce((a, x) => a + num(x.amount), 0);
+}
+/** מה שיירד בחיוב הקרוב */
+function dueNextCharge() {
+  const nc = nextChargeDate();
+  const t = todayISO();
+  return S.tx.filter(x => x.type === 'expense' && x.src === 'credit' && x.date <= t && chargeDate(x) === nc)
+    .reduce((a, x) => a + num(x.amount), 0);
+}
+/** המספר שמשווים מולו לאפליקציית הבנק */
+function bankExpected() { return balanceAsOf(todayISO()) + pendingCredit(); }
 
 /* ---------------- כסף ---------------- */
 function money(n, sign) {
@@ -665,6 +749,52 @@ function nextOcc(iso, r) {
   t.setDate(Math.min(r.day || d.getDate(), dim(t.getFullYear(), t.getMonth())));
   return toISO(t);
 }
+/** חיובים קבועים שעוד לא הגיע תאריכם — נוצרים לצפייה בלבד, לא נשמרים */
+function project(to) {
+  const out = [];
+  S.recurring.forEach(r => {
+    if (r.active === false) return;
+    let cur = r.lastRun ? nextOcc(r.lastRun, r) : r.startDate;
+    let done = r.done || 0, guard = 0;
+    while (cur <= to && guard++ < 500) {
+      if (r.endDate && cur > r.endDate) break;
+      if (r.count && done >= r.count) break;
+      out.push({
+        id: 'p' + r.id + cur, type: r.type || 'expense', title: r.title, amount: num(r.amount),
+        cat: r.cat, date: cur, method: r.method || '', src: r.src || 'bank',
+        excluded: !!r.excluded, series: r.id, projected: true
+      });
+      done++;
+      cur = nextOcc(cur, r);
+    }
+  });
+  return out;
+}
+/** היתרה כולל חיובים קבועים שצפויים עד התאריך הזה */
+function projBalance(iso) {
+  let b = balanceAsOf(iso);
+  for (const t of project(iso)) b += (t.type === 'income' ? 1 : -1) * num(t.amount);
+  return b;
+}
+/** כל התמונה של מחזור אחד: מה נכנס, מה יצא, ובכמה מסיימים */
+function cycleStats(cs) {
+  const from = cs, to = cycleEndISO(cs), today = todayISO();
+  const all = S.tx.filter(t => inRange(t.date, from, to))
+    .concat(project(to).filter(t => inRange(t.date, from, to)));
+  const pick = (ty, ex) => all.filter(t => t.type === ty && (ex ? t.excluded : !t.excluded));
+  return {
+    from, to, all,
+    income: sum(pick('income', false)),
+    spend: sum(pick('expense', false)),
+    offBudget: sum(pick('expense', true)) - sum(pick('income', true)),
+    opening: projBalance(addDays(from, -1)),
+    closing: projBalance(to),
+    hasFuture: all.some(t => t.date > today),
+    isFuture: from > today,
+    isPast: to < today,
+    isCurrent: from <= today && to >= today
+  };
+}
 function runRecurring() {
   const today = todayISO();
   let added = 0;
@@ -678,6 +808,7 @@ function runRecurring() {
       S.tx.push({
         id: uid(), type: r.type || 'expense', title: r.title, amount: num(r.amount),
         cat: r.cat, date: cur, note: r.note || '', method: r.method || '',
+        src: r.src || (r.type === 'income' ? 'bank' : 'bank'),
         excluded: !!r.excluded, series: r.id
       });
       r.lastRun = cur; r.done = (r.done || 0) + 1; added++;
@@ -749,61 +880,92 @@ function render() {
 }
 
 /* ============================ בית ============================ */
+let VIEW = null;                       // תחילת המחזור שמוצג במסך הבית
+function viewCycle() { return VIEW || cycleStartISO(todayISO()); }
+
 function renderHome() {
-  const t = todayISO(), d = new Date();
+  const today = todayISO(), d = new Date();
   const name = S.settings.name || 'חבר';
   $('#h-avatar').textContent = name.trim().charAt(0) || 'י';
   $('#h-hello').innerHTML = 'היי, ' + esc(name) + ' 👋<span>יום ' + DAYS[d.getDay()] + ', ' + d.getDate() + ' ב' + MON[d.getMonth()] + '</span>';
 
-  // היתרה — הכוכב של המסך
-  const bal = balanceAsOf(t);
+  const cs = viewCycle(), st = cycleStats(cs);
+  $('#h-cyclab').textContent = cycleShort(cs) + (st.isCurrent ? '' : ' ›');
+  $('#h-cyclab').style.color = st.isCurrent ? '' : 'var(--p)';
+
+  // המספר הגדול
+  const bal = st.isCurrent ? balanceAsOf(today) : st.closing;
   const el = $('#h-balance');
   el.className = 'big num ' + (bal < 0 ? 'neg' : 'pos');
   animateNum(el, bal, money);
+  $('#h-bal-lab').textContent = st.isCurrent ? 'היתרה שלי' :
+    (st.isFuture ? 'יתרה חזויה בסוף ' + cycleShort(cs) : 'היתרה בסוף ' + cycleShort(cs));
 
-  const cs = cycleStartISO(t);
-  const opened = balanceAsOf(addDays(cs, -1));
-  $('#h-carry').innerHTML = 'נכנסת ל' + cycleShort(t) + ' עם <b class="' + (opened < 0 ? 'neg' : 'pos') + '">' + money(opened) +
-    '</b> · המחזור: ' + cycleLabel(t);
+  const closingTag = (st.isCurrent && st.hasFuture) ? ' (צפי)' : '';
+  $('#h-carry').innerHTML =
+    'נכנסת ל' + cycleShort(cs) + ' עם <b class="' + (st.opening < 0 ? 'neg' : 'pos') + '">' + money(st.opening) + '</b>' +
+    (st.isCurrent ? ' · יוצא עם <b class="' + (st.closing < 0 ? 'neg' : 'pos') + '">' + money(st.closing) + '</b>' + closingTag : '') +
+    '<br><span class="tiny">' + cycleLabel(cs) + '</span>';
 
-  const r = rangeFor(S.settings.homePeriod);
-  const out = spendIn(r.from, r.to), inc = incomeIn(r.from, r.to);
-  animateNum($('#h-out'), out, money);
-  animateNum($('#h-in'), inc, money);
-  $('#h-out-lab').textContent = r.label;
-  $('#h-in-lab').textContent = r.label;
+  animateNum($('#h-out'), st.spend, money);
+  animateNum($('#h-in'), st.income, money);
+  const lab = st.hasFuture ? cycleShort(cs) + ' · כולל צפוי' : cycleShort(cs);
+  $('#h-out-lab').textContent = lab;
+  $('#h-in-lab').textContent = lab;
+  // צפוי בבנק + החיוב הקרוב — מספרים של "עכשיו", לא של המחזור המוצג
+  $('#h-bank').classList.toggle('hide', !st.isCurrent);
+  if (st.isCurrent) {
+    const be = bankExpected(), due = dueNextCharge(), nc = fromISO(nextChargeDate());
+    const bb = $('#h-bankbal');
+    bb.className = 'num ' + (be < 0 ? 'neg' : 'pos');
+    bb.style.fontSize = '22px';
+    animateNum(bb, be, money);
+    animateNum($('#h-due'), due, v => money(v).replace('−', ''));
+    $('#h-due-lab').textContent = 'יירד ב-' + p2(nc.getDate()) + '/' + p2(nc.getMonth() + 1);
+    const pend = pendingCredit();
+    $('#h-due-sub').textContent = pend ? 'סה״כ אשראי שטרם חויב: ' + money(pend).replace('−', '') : 'אין אשראי פתוח';
+  }
 
-  // טבעות יעדים (תמיד לפי המחזור)
-  const cr = rangeFor('cycle');
-  const rings = S.categories.map(c => {
-    const spent = sum(txIn(cr.from, cr.to, 'expense').filter(x => x.cat === c.id && !x.excluded));
+  $('#h-note').textContent = st.offBudget
+    ? 'בנוסף ' + money(st.offBudget).replace('−', '') + ' תנועות שלא נספרות בתקציב (חיסכון / חד פעמי) — הן כן משפיעות על היתרה.'
+    : '';
+
+  // טבעות היעדים — לפי המחזור המוצג
+  $('#h-rings').innerHTML = S.categories.map(c => {
+    const spent = sum(st.all.filter(x => x.type === 'expense' && x.cat === c.id && !x.excluded));
     const goal = num(c.goal);
     const pct = goal > 0 ? Math.min(spent / goal, 1) : 0;
     const over = goal > 0 && spent > goal;
-    const deg = Math.round(pct * 360);
-    const color = over ? 'var(--red)' : 'var(--p)';
     return '<button class="ring" data-editcat="' + c.id + '">' +
-      '<div class="dial" style="--c:' + color + ';--deg:0deg" data-deg="' + deg + '">' +
-        '<div class="inner"><div class="e">' + c.emoji + '</div><div class="n">' + esc(c.name) + '</div>' +
-        '<div class="p num">' + Math.round(spent) + (goal > 0 ? '/' + Math.round(goal) : '') + '</div></div></div></button>';
-  }).join('');
-  $('#h-rings').innerHTML = rings || '<div class="empty">אין קטגוריות. הוסף אחת במסך הקטגוריות.</div>';
+      '<div class="dial" style="--c:' + (over ? 'var(--red)' : 'var(--p)') + ';--deg:0deg" data-deg="' + Math.round(pct * 360) + '">' +
+      '<div class="inner"><div class="e">' + c.emoji + '</div><div class="n">' + esc(c.name) + '</div>' +
+      '<div class="p num">' + Math.round(spent) + (goal > 0 ? '/' + Math.round(goal) : '') + '</div></div></div></button>';
+  }).join('') || '<div class="empty">אין קטגוריות. הוסף אחת במסך הקטגוריות.</div>';
 
-  const recent = S.tx.slice().sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id)).slice(0, 4);
-  $('#h-recent').innerHTML = recent.length
-    ? recent.map(txRow).join('')
-    : '<div class="empty" style="color:rgba(255,255,255,.75)">עוד לא רשמת כלום. לחץ על ➕ למטה כדי להתחיל.</div>';
+  // הרשימה — של המחזור המוצג, כולל מה שצפוי
+  $('#h-recent-lab').textContent = st.isCurrent ? 'התנועות האחרונות שלי' : 'התנועות ב' + cycleShort(cs);
+  const rows = st.all.slice().sort((a, b) => b.date.localeCompare(a.date) || String(b.id).localeCompare(String(a.id))).slice(0, 6);
+  $('#h-recent').innerHTML = rows.length
+    ? rows.map(txRow).join('')
+    : '<div class="empty" style="color:rgba(255,255,255,.75)">אין תנועות במחזור הזה.</div>';
 }
 
 function txRow(t) {
   const d = fromISO(t.date);
   const isIn = t.type === 'income';
-  return '<button class="tx" data-tx="' + t.id + '" style="width:100%;text-align:start">' +
+  const soon = t.projected || t.date > todayISO();
+  const tag = (t.projected ? '<span class="tag">צפוי</span>' : (t.date > todayISO() ? '<span class="tag">עתידי</span>' : '')) +
+    (isBorderline(t) ? '<span class="tag" style="color:#B45309;background:#FEF3C7">גבולית</span>' : '');
+  const tagName = t.projected ? 'div' : 'button';
+  return '<' + tagName + ' class="tx' + (soon ? ' soon' : '') + '"' +
+    (t.projected ? '' : ' data-tx="' + t.id + '"') + ' style="width:100%;text-align:start">' +
     '<div class="ic">' + (t.saving ? '💰' : catEmoji(t.cat)) + '</div>' +
-    '<div class="grow" style="min-width:0"><div class="t">' + esc(t.title || catName(t.cat)) + '</div>' +
-    '<div class="c">' + esc(t.saving ? 'חיסכון' : catName(t.cat)) + (t.series ? ' · קבוע' : '') + (t.excluded ? ' · לא בתקציב' : '') + '</div></div>' +
+    '<div class="grow" style="min-width:0"><div class="t">' + esc(t.title || catName(t.cat)) + tag + '</div>' +
+    '<div class="c">' + esc(t.saving ? 'חיסכון' : catName(t.cat)) +
+      (t.type === 'expense' && t.src ? ' · ' + srcName(t.src) : '') +
+      (t.series ? ' · קבוע' : '') + (t.excluded ? ' · לא בתקציב' : '') + '</div></div>' +
     '<div><div class="a ' + (isIn ? 'pos' : '') + '">' + (isIn ? '+' : '') + money(num(t.amount)).replace('−', '') + '</div>' +
-    '<div class="d">' + p2(d.getDate()) + '/' + p2(d.getMonth() + 1) + '</div></div></button>';
+    '<div class="d">' + p2(d.getDate()) + '/' + p2(d.getMonth() + 1) + '</div></div></' + tagName + '>';
 }
 
 /* ============================ הוצאות ============================ */
@@ -898,6 +1060,9 @@ function renderProfile() {
   $('#p-year-bar').style.width = (budget ? Math.min(yearSpend / (budget * 12) * 100, 100) : 0) + '%';
   $('#p-year-sub').textContent = budget ? Math.round(yearSpend / (budget * 12) * 100) + '% מהתקציב השנתי' : String(y);
 
+  const nr = needReview().length;
+  $('#p-review').innerHTML = '💳 שיוך אמצעי תשלום' + (nr ? ' <b style="color:var(--red)">· ' + nr + ' לבדיקה</b>' : ' ✅');
+
   // גרף
   const mode = S.settings.chartMode;
   $('#p-chart-title').textContent = mode === 'days' ? 'ימים אחרונים' : 'חודשים אחרונים';
@@ -919,19 +1084,29 @@ function renderProfile() {
     '<div class="bar" style="height:0;transition-delay:' + (i * 45) + 'ms" data-h="' + Math.max(3, c.value / max * 92) + '"></div>' +
     '<div class="cl">' + c.label + '</div></div>').join('');
 
-  // מחזורים
-  let k = cycleStartISO(todayISO()); const rows = [];
-  for (let i = 0; i < 6; i++) { rows.push(k); k = cycleStartISO(addDays(k, -1)); }
-  const mx = Math.max(1, ...rows.map(s => spendIn(s, cycleEndISO(s))));
+  // מחזורים — 4 אחורה, הנוכחי, ו-3 קדימה בתחזית
+  const cur = cycleStartISO(todayISO());
+  const rows = [];
+  let k = cur;
+  for (let i = 0; i < 4; i++) { k = cycleStartISO(addDays(k, -1)); rows.unshift(k); }
+  rows.push(cur);
+  k = cur;
+  for (let i = 0; i < 3; i++) { k = cycleStartISO(addDays(addMonths(k, 1), 1)); rows.push(k); }
+  const stats = rows.map(cycleStats);
+  const mx = Math.max(1, ...stats.map(s => s.spend));
   $('#p-cycles').innerHTML = rows.map((s, i) => {
-    const v = spendIn(s, cycleEndISO(s));
-    const bal = balanceAsOf(cycleEndISO(s));
-    return '<div class="between" style="margin-bottom:9px">' +
-      '<span class="pill ' + (i === 0 ? 'on' : '') + '" style="min-width:78px;justify-content:center">' + cycleShort(s) + '</span>' +
+    const st = stats[i];
+    const tracked = st.to >= S.settings.openingDate;
+    return '<div class="between" style="margin-bottom:9px' + (st.isFuture ? ';opacity:.72' : '') + '">' +
+      '<span class="pill ' + (st.isCurrent ? 'on' : '') + '" style="min-width:78px;justify-content:center' +
+        (st.isFuture ? ';border-style:dashed' : '') + '">' + cycleShort(s) + '</span>' +
       '<div class="grow"><div class="bar" style="height:16px;border-radius:9px;background:var(--line);overflow:hidden">' +
-      '<i style="display:block;height:100%;width:0;transition:width .8s cubic-bezier(.16,.85,.3,1) ' + (i * 55) + 'ms;background:' + (i === 0 ? 'var(--p)' : '#B7B2D8') + ';border-radius:9px" data-w="' + (v / mx * 100) + '"></i></div></div>' +
-      '<span style="text-align:end;min-width:92px"><b class="num">' + money(v) + '</b>' +
-      '<div class="tiny num ' + (bal < 0 ? 'neg' : 'muted') + '">יתרה ' + money(bal) + '</div></span></div>';
+      '<i style="display:block;height:100%;width:0;transition:width .8s cubic-bezier(.16,.85,.3,1) ' + (i * 55) + 'ms;background:' +
+        (st.isCurrent ? 'var(--p)' : '#B7B2D8') + ';border-radius:9px" data-w="' + (st.spend / mx * 100) + '"></i></div></div>' +
+      '<span style="text-align:end;min-width:96px"><b class="num">' + money(st.spend) + '</b>' +
+      '<div class="tiny num ' + (!tracked ? 'muted' : (st.closing < 0 ? 'neg' : 'muted')) + '">' +
+        (tracked ? (st.isPast ? 'יתרה ' : 'צפי ') + money(st.closing) : 'לפני תחילת המעקב') +
+      '</div></span></div>';
   }).join('');
 }
 
@@ -987,7 +1162,7 @@ let F = null;
 function startFlow(preset) {
   F = Object.assign({
     step: 1, type: 'expense', title: '', amount: '', cat: '', date: todayISO(),
-    note: '', method: '', excluded: false, multi: false, rec: null, editId: null
+    note: '', method: '', src: 'credit', ccShift: 0, excluded: false, multi: false, rec: null, editId: null
   }, preset || {});
   $('#flow').classList.add('on');
   drawFlow();
@@ -1007,7 +1182,8 @@ function drawFlow() {
     b.innerHTML =
       '<div class="row" style="gap:8px;flex-wrap:wrap">' +
         '<button class="pill ' + (F.type === 'income' ? 'on' : '') + '" data-act="flowType">' + (F.type === 'income' ? '💵 הכנסה' : '💸 הוצאה') + '</button>' +
-        '<button class="pill" data-act="flowDate">📅 ' + dateChip(F.date) + '</button>' +
+        '<button class="pill' + (F.date === todayISO() ? '' : ' on') + '" data-act="flowDate">📅 ' +
+          (F.date > todayISO() ? 'עתידי · ' : '') + dateChip(F.date) + '</button>' +
       '</div>' +
       (S.quick.length ? '<div class="eyebrow mt">קיצורים:</div><div class="chips">' +
         S.quick.map(q => '<button class="pill" data-quick="' + q.id + '">' + catEmoji(q.cat) + ' ' + esc(q.title) +
@@ -1026,7 +1202,13 @@ function drawFlow() {
     b.innerHTML =
       (sug.length ? '<div class="eyebrow">נפוץ עבור זה:</div><div class="chips">' +
         sug.map(a => '<button class="pill" data-amt="' + a + '">' + a.toLocaleString('en-US') + ' ₪</button>').join('') + '</div>' : '') +
-      '<div class="eyebrow mt">אמצעי תשלום:</div><div class="chips">' +
+      '<div class="eyebrow mt">' + (F.type === 'income' ? 'נכנס ל:' : 'שולם מ:') + '</div><div class="chips">' +
+        (F.type === 'income' ? ['bank', 'cash'] : SRC_KEYS).map(k =>
+          '<button class="pill ' + (F.src === k ? 'on' : '') + '" data-src="' + k + '">' +
+          SRC[k].e + ' ' + SRC[k].n + '</button>').join('') + '</div>' +
+      (F.src === 'credit' && F.type === 'expense'
+        ? '<div class="sm muted mt-s" style="line-height:1.7">' + chargeLine() + '</div>' : '') +
+      '<div class="eyebrow mt">אמצעי תשלום (אופציונלי):</div><div class="chips">' +
         S.methods.map(m => '<button class="pill ' + (F.method === m ? 'on' : '') + '" data-method="' + esc(m) + '">' + esc(m) + '</button>').join('') +
         '<button class="pill" data-act="newMethod" style="border-style:dashed">+ מותאם</button></div>' +
       '<div class="field"><label>הערה (אופציונלי)</label><textarea class="inp" id="f-note-in" placeholder="הוסף הערה…">' + esc(F.note) + '</textarea></div>' +
@@ -1076,6 +1258,19 @@ function suggestAmounts(title, type) {
   const a = S.tx.filter(x => x.type === type && (x.title || '').toLowerCase() === t).map(x => Math.round(num(x.amount)));
   return Array.from(new Set(a)).slice(-4).reverse();
 }
+/** השורה שמסבירה מתי הקנייה הזו תרד בפועל מהבנק */
+function chargeLine() {
+  const t = { src: 'credit', date: F.date, ccShift: num(F.ccShift) || 0 };
+  const cd = fromISO(chargeDate(t));
+  let s = '💳 יירד מהבנק ב-<b>' + p2(cd.getDate()) + '/' + p2(cd.getMonth() + 1) + '/' + cd.getFullYear() + '</b>';
+  if (isBorderline(t)) {
+    const alt = { src: 'credit', date: F.date, ccShift: t.ccShift + altShift(t) };
+    const ad = fromISO(chargeDate(alt));
+    s += '<br><span class="pos">עסקה גבולית</span> — הבנק מזיז את הסגירה לפי ימי עסקים. ' +
+      '<button class="b" style="color:var(--p)" data-act="flowShift">העבר ל-' + p2(ad.getDate()) + '/' + p2(ad.getMonth() + 1) + ' ›</button>';
+  }
+  return s;
+}
 function recSummary(r) {
   if (r.freq === 'weekly') return 'קבוע שבועי';
   if (r.count) return 'תשלומים · ' + r.count + ' × ' + Math.round(num(r.amount || 0) || 0) + ' ב-' + r.day + ' לחודש';
@@ -1101,12 +1296,13 @@ function flowNext() {
 function saveFlow() {
   if (F.editId) {
     const t = S.tx.find(x => x.id === F.editId);
-    if (t) Object.assign(t, { type: F.type, title: F.title, amount: F.amount, cat: F.cat, date: F.date, note: F.note, method: F.method, excluded: F.excluded });
+    if (t) Object.assign(t, { type: F.type, title: F.title, amount: F.amount, cat: F.cat, date: F.date,
+      note: F.note, method: F.method, src: F.src, ccShift: num(F.ccShift) || 0, excluded: F.excluded, srcAuto: false });
     save(); endFlow(); toast('עודכן'); return;
   }
   if (F.rec) {
     const r = Object.assign({
-      id: uid(), type: F.type, title: F.title, amount: F.amount, cat: F.cat, method: F.method,
+      id: uid(), type: F.type, title: F.title, amount: F.amount, cat: F.cat, method: F.method, src: F.src,
       note: F.note, excluded: F.excluded, active: true, done: 0, lastRun: null
     }, F.rec);
     r.startDate = r.startDate || F.date;
@@ -1116,7 +1312,7 @@ function saveFlow() {
   } else {
     S.tx.push({
       id: uid(), type: F.type, title: F.title, amount: F.amount, cat: F.cat, date: F.date,
-      note: F.note, method: F.method, excluded: F.excluded
+      note: F.note, method: F.method, src: F.src, ccShift: num(F.ccShift) || 0, excluded: F.excluded
     });
     toast(F.type === 'income' ? 'הכנסה נרשמה' : 'נרשם');
   }
@@ -1135,8 +1331,31 @@ function editTx(id) {
     '<div class="card" style="background:var(--bg);box-shadow:none"><div class="between"><span class="b">סכום</span>' +
     '<b class="num" style="font-size:22px">' + (t.type === 'income' ? '+' : '−') + money(num(t.amount)).replace('−', '') + '</b></div>' +
     (t.note ? '<div class="sm muted mt-s">' + esc(t.note) + '</div>' : '') + '</div>' +
+    (t.type === 'expense' && !t.saving ? chargeBox(t) : '') +
     (t.saving ? '' : '<button class="btn mt" data-edittx="' + id + '">עריכה</button>') +
     '<button class="btn danger mt-s" data-deltx="' + id + '">מחיקה</button>');
+}
+/** קופסת מקור התשלום בתוך חלון פרטי התנועה */
+function chargeBox(t) {
+  const cur = t.src || 'credit';
+  let s = '<div class="eyebrow mt">שולם מ:</div><div class="chips">' +
+    SRC_KEYS.map(k => '<button class="pill ' + (cur === k ? 'on' : '') + '" data-setsrc="' + k + '" data-txid="' + t.id + '">' +
+      SRC[k].e + ' ' + SRC[k].n + '</button>').join('') + '</div>';
+  if (t.srcAuto) s += '<div class="tiny mt-s" style="color:var(--p)">שויך אוטומטית — שווה לאשר.</div>';
+  if (cur === 'credit') {
+    const cd = fromISO(chargeDate(t)), done = chargeDate(t) <= todayISO();
+    s += '<div class="sm muted mt-s" style="line-height:1.7">💳 ' + (done ? 'ירד' : 'יירד') + ' מהבנק ב-<b>' +
+      p2(cd.getDate()) + '/' + p2(cd.getMonth() + 1) + '/' + cd.getFullYear() + '</b>';
+    if (isBorderline(t)) {
+      const alt = { src: 'credit', date: t.date, ccShift: (num(t.ccShift) || 0) + altShift(t) };
+      const ad = fromISO(chargeDate(alt));
+      s += '<br><span class="pos">עסקה גבולית</span> — ' +
+        '<button class="b" style="color:var(--p)" data-shifttx="' + t.id + '">העבר ל-' +
+        p2(ad.getDate()) + '/' + p2(ad.getMonth() + 1) + ' ›</button>';
+    }
+    s += '</div>';
+  }
+  return s;
 }
 function editCat(id) {
   const c = catById(id) || { id: '', name: '', emoji: '💸', goal: 0 };
@@ -1210,6 +1429,9 @@ function editRec(id, draft) {
       (isIn ? 'למשל: משכורת' : 'למשל: שכר דירה') + '"></div>' +
     '<div class="field"><label>סכום (₪)</label><input class="inp" id="r-amount" type="number" inputmode="decimal" value="' + (num(r.amount) || '') + '"></div>' +
     (isIn ? '' : '<div class="field"><label>קטגוריה</label>' + catOptions(r.cat) + '</div>') +
+    (isIn ? '' : '<div class="eyebrow mt">יורד מ:</div><div class="chips" style="margin-bottom:4px">' +
+      SRC_KEYS.map(k => '<button class="pill ' + ((r.src || 'bank') === k ? 'on' : '') + '" data-rsrc="' + k + '">' +
+        SRC[k].e + ' ' + SRC[k].n + '</button>').join('') + '</div>') +
     '<div class="field"><label>תדירות</label><select class="inp" id="r-freq">' +
       '<option value="monthly"' + (weekly ? '' : ' selected') + '>חודשי</option>' +
       '<option value="weekly"' + (weekly ? ' selected' : '') + '>שבועי</option></select></div>' +
@@ -1270,6 +1492,28 @@ function anchorPreview() {
     ' ועד היום נרשמו תנועות של <b class="num">' + money(net, true) + '</b>,<br>' +
     'אז היתרה שתוצג עכשיו: <b class="num ' + (bal + net < 0 ? 'neg' : 'pos') + '">' + money(bal + net) + '</b>';
 }
+function needReview() { return S.tx.filter(t => t.srcAuto && t.type === 'expense' && !t.saving); }
+function openReview() {
+  const list = needReview().sort((a, b) => b.date.localeCompare(a.date));
+  openSheet('<h3>שיוך אמצעי תשלום</h3>' +
+    '<p class="lead">התנועות האלה שויכו אוטומטית לפי מה שסומן בהן קודם. עבור עליהן ואשר או תקן — בלי זה ' +
+    '״צפוי בבנק״ לא יתאים לבנק.</p>' +
+    (list.length ? '<div class="row" style="gap:8px;margin-bottom:12px">' +
+      SRC_KEYS.map(k => '<button class="pill" data-bulksrc="' + k + '">הכל ' + SRC[k].e + '</button>').join('') + '</div>' : '') +
+    (list.length ? list.map(t => {
+      const d = fromISO(t.date);
+      return '<div class="card" style="margin-bottom:8px;padding:12px">' +
+        '<div class="between"><span><b>' + esc(t.title || catName(t.cat)) + '</b>' +
+        '<div class="tiny muted">' + p2(d.getDate()) + '/' + p2(d.getMonth() + 1) + ' · ' + esc(catName(t.cat)) +
+        (t.method ? ' · ' + esc(t.method) : '') + '</div></span>' +
+        '<b class="num">' + money(num(t.amount)).replace('−', '') + '</b></div>' +
+        '<div class="chips mt-s">' + SRC_KEYS.map(k =>
+          '<button class="pill ' + (t.src === k ? 'on' : '') + '" data-setsrc="' + k + '" data-txid="' + t.id +
+          '" data-inreview="1" style="padding:6px 11px;font-size:12px">' + SRC[k].e + ' ' + SRC[k].n + '</button>').join('') +
+        '</div></div>';
+    }).join('') : '<div class="empty">הכל משויך ומאושר. ✅</div>') +
+    (list.length ? '<button class="btn mt" data-act="confirmAll">אשר את כולן כמו שהן (' + list.length + ')</button>' : ''));
+}
 function openSettings() {
   const s = S.settings;
   openSheet('<h3>הגדרות</h3>' +
@@ -1277,6 +1521,12 @@ function openSettings() {
     '<div class="field"><label>המחזור החודשי מתחיל ביום</label>' +
     '<input class="inp" id="st-day" type="number" min="1" max="28" value="' + s.cycleStartDay + '">' +
     '<div class="tiny muted mt-s">10 = כל חודש מתחיל ב-10 ונגמר ב-9 של החודש הבא.</div></div>' +
+    '<div class="field"><label>יום סגירת מחזור האשראי</label>' +
+    '<input class="inp" id="st-close" type="number" min="1" max="28" value="' + s.ccCloseDay + '">' +
+    '<div class="tiny muted mt-s">קנייה עד היום הזה נכנסת לחיוב של אותו חודש, אחריו — לחודש הבא. ' +
+    'הבנק מזיז את זה לפי ימי עסקים, אז עסקאות סביב התאריך מסומנות כגבוליות וניתן להעביר אותן ידנית.</div></div>' +
+    '<div class="field"><label>יום ירידת החיוב</label>' +
+    '<input class="inp" id="st-charge" type="number" min="1" max="28" value="' + s.ccChargeDay + '"></div>' +
     '<div class="field"><label>נקודת כניסה (₪)</label>' +
     '<input class="inp" id="st-bal" type="number" value="' + Math.round(num(s.openingBalance)) + '">' +
     '<div class="tiny muted mt-s">כמה היה בחשבון בתחילת המחזור. מכאן היתרה מתגלגלת לבד קדימה.</div></div>' +
@@ -1333,10 +1583,19 @@ function download(name, content, type) {
 
 /* ============================ אירועים ============================ */
 document.addEventListener('click', e => {
-  const el = e.target.closest('[data-go],[data-act],[data-tx],[data-editcat],[data-goal],[data-editrec],[data-editquick],[data-editsav],[data-dep],[data-wd],[data-quick],[data-freq],[data-amt],[data-method],[data-pickcat],[data-emo],[data-rtype],[data-rmode],[data-savecat],[data-delcat],[data-saverec],[data-delrec],[data-savequick],[data-delquick],[data-savesav],[data-delsav],[data-domove],[data-edittx],[data-deltx],[data-v],[data-toggle]');
+  const el = e.target.closest('[data-go],[data-cyc],[data-act],[data-src],[data-setsrc],[data-shifttx],[data-bulksrc],[data-tx],[data-editcat],[data-goal],[data-editrec],[data-editquick],[data-editsav],[data-dep],[data-wd],[data-quick],[data-freq],[data-amt],[data-method],[data-pickcat],[data-emo],[data-rtype],[data-rmode],[data-rsrc],[data-savecat],[data-delcat],[data-saverec],[data-delrec],[data-savequick],[data-delquick],[data-savesav],[data-delsav],[data-domove],[data-edittx],[data-deltx],[data-v],[data-toggle]');
   if (!el) return;
   const d = el.dataset;
 
+  if (d.cyc !== undefined) {
+    const n = num(d.cyc);
+    if (n === 0) VIEW = null;
+    else if (n < 0) VIEW = cycleStartISO(addDays(viewCycle(), -1));
+    else VIEW = cycleStartISO(addDays(cycleEndISO(viewCycle()), 1));
+    if (VIEW === cycleStartISO(todayISO())) VIEW = null;
+    $$('#s-home [data-cnt]').forEach(e => { e._v = null; });
+    renderHome(); playIn(); return;
+  }
   if (d.go) { closeSheet(); go(d.go); return; }
   if (d.toggle) { S.settings[d.toggle] = !S.settings[d.toggle]; save(); render(); return; }
   if (d.v && el.parentElement.dataset.seg) {
@@ -1350,7 +1609,17 @@ document.addEventListener('click', e => {
   if (d.act === 'add') { startFlow(); return; }
   if (d.act === 'addIncome') { startFlow({ type: 'income' }); return; }
   if (d.act === 'flowBack') { if (F.step > 1) { stash(); F.step--; drawFlow(); } else endFlow(); return; }
-  if (d.act === 'flowType') { stash(); F.type = F.type === 'income' ? 'expense' : 'income'; drawFlow(); return; }
+  if (d.act === 'flowType') {
+    stash(); F.type = F.type === 'income' ? 'expense' : 'income';
+    F.src = F.type === 'income' ? 'bank' : 'credit'; F.ccShift = 0;
+    drawFlow(); return;
+  }
+  if (d.src) { stash(); F.src = d.src; F.ccShift = 0; drawFlow(); return; }
+  if (d.act === 'flowShift') {
+    stash();
+    F.ccShift = (num(F.ccShift) || 0) + altShift({ src: 'credit', date: F.date, ccShift: num(F.ccShift) || 0 });
+    drawFlow(); return;
+  }
   if (d.act === 'flowMulti') { stash(); F.multi = !F.multi; drawFlow(); return; }
   if (d.act === 'flowExcl') { stash(); F.excluded = !F.excluded; drawFlow(); return; }
   if (d.act === 'flowDate') {
@@ -1411,6 +1680,7 @@ document.addEventListener('click', e => {
     return;
   }
   if (d.rtype) { const r = stashRec(); r.type = d.rtype; if (d.rtype === 'income') { r.cat = ''; r.count = ''; } editRec(SH.recId || '', r); return; }
+  if (d.rsrc) { const r = stashRec(); r.src = d.rsrc; editRec(SH.recId || '', r); return; }
   if (d.rmode) { const r = stashRec(); r.mode = d.rmode; $$('[data-rmode]').forEach(b => b.classList.toggle('on', b === el)); recCalc(); return; }
 
   /* --- saves --- */
@@ -1446,6 +1716,7 @@ document.addEventListener('click', e => {
       title: (r.title || '').trim(),
       amount: (cnt && r.mode === 'total') ? amt / cnt : amt,
       cat: r.type === 'income' ? '' : (r.cat || ''),
+      src: r.type === 'income' ? 'bank' : (r.src || 'bank'),
       freq: r.freq || 'monthly',
       day: num(r.day) || 1,
       count: r.type === 'income' ? null : cnt,
@@ -1492,9 +1763,30 @@ document.addEventListener('click', e => {
     });
     save(); closeSheet(); render(); toast(d.dir === 'in' ? 'הופקד' : 'נמשך'); return;
   }
+  if (d.setsrc) {
+    const t = S.tx.find(x => x.id === d.txid);
+    if (t) { t.src = d.setsrc; t.ccShift = 0; t.srcAuto = false; save(); }
+    if (d.inreview) openReview(); else if (d.txid) editTx(d.txid);
+    render(); return;
+  }
+  if (d.bulksrc) {
+    needReview().forEach(t => { t.src = d.bulksrc; t.ccShift = 0; t.srcAuto = false; });
+    save(); openReview(); render(); toast('שויך'); return;
+  }
+  if (d.act === 'confirmAll') {
+    needReview().forEach(t => { t.srcAuto = false; });
+    save(); closeSheet(); render(); toast('אושר'); return;
+  }
+  if (d.act === 'review') { openReview(); return; }
+  if (d.shifttx) {
+    const t = S.tx.find(x => x.id === d.shifttx);
+    if (t) { t.ccShift = (num(t.ccShift) || 0) + altShift(t); save(); editTx(t.id); render(); }
+    return;
+  }
   if (d.edittx) {
     const t = S.tx.find(x => x.id === d.edittx); closeSheet();
-    startFlow({ editId: t.id, type: t.type, title: t.title, amount: num(t.amount), cat: t.cat, date: t.date, note: t.note, method: t.method, excluded: !!t.excluded });
+    startFlow({ editId: t.id, type: t.type, title: t.title, amount: num(t.amount), cat: t.cat, date: t.date,
+      note: t.note, method: t.method, src: t.src || 'credit', ccShift: num(t.ccShift) || 0, excluded: !!t.excluded });
     return;
   }
   if (d.deltx) {
@@ -1505,6 +1797,8 @@ document.addEventListener('click', e => {
   if (d.act === 'saveSettings') {
     S.settings.name = ($('#st-name').value || '').trim();
     S.settings.cycleStartDay = Math.min(28, Math.max(1, num($('#st-day').value) || 1));
+    if ($('#st-close')) S.settings.ccCloseDay = Math.min(28, Math.max(1, num($('#st-close').value) || 8));
+    if ($('#st-charge')) S.settings.ccChargeDay = Math.min(28, Math.max(1, num($('#st-charge').value) || 10));
     S.settings.openingBalance = num($('#st-bal').value);
     S.settings.openingDate = $('#st-date') ? $('#st-date').value || todayISO() : todayISO();
     snapAnchor();
@@ -1542,6 +1836,18 @@ function boot() {
     const key = seg.dataset.seg, v = S.settings[key];
     Array.from(seg.children).forEach(b => b.classList.toggle('on', b.dataset.v === v));
   });
+  // מילוי רטרואקטיבי של מקור התשלום לפי אמצעי התשלום הישן
+  let filled = 0;
+  S.tx.forEach(t => {
+    if (t.src) return;
+    t.src = t.type === 'income' ? 'bank'
+      : t.method === 'אשראי' ? 'credit'
+      : t.method === 'מזומן' ? 'cash' : 'bank';
+    if (t.type === 'expense' && !t.saving) t.srcAuto = true;
+    filled++;
+  });
+  S.recurring.forEach(r => { if (!r.src) r.src = 'bank'; });
+  if (filled) save();
   if (S.settings.openingDate !== cycleStartISO(S.settings.openingDate)) { snapAnchor(); save(); }
   const added = runRecurring();
   go('home');
