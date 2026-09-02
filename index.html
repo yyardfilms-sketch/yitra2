@@ -419,7 +419,12 @@ textarea.inp{resize:vertical;min-height:70px}
     <div class="h1">💰 חסכונות</div>
     <div class="card" style="background:var(--p);color:#fff">
       <div class="between"><div class="b">סך החסכונות</div><div class="num b" style="font-size:24px" id="sv-total" data-cnt>0 ₪</div></div>
-      <div class="tiny mt-s" style="opacity:.8">הפקדה מורידה מהיתרה, משיכה מחזירה אליה.</div>
+      <div class="tiny mt-s" style="opacity:.8" id="sv-split"></div>
+    </div>
+    <div class="card mt sm" style="line-height:1.75">
+      <div><b>🔒 מעטפה וירטואלית</b> — הכסף עדיין באותו חשבון, רק שיריינת אותו.
+      יורד מ<b>היתרה שלי</b> (כי הוא כבר לא פנוי), לא יורד מ<b>צפוי בבנק</b> (כי פיזית הוא שם).</div>
+      <div class="mt-s"><b>🏦 חשבון נפרד</b> — הכסף באמת עבר לחשבון או לקרן אחרת. יורד משני המספרים.</div>
     </div>
     <div id="sv-list" class="mt"></div>
     <button class="btn mt" data-act="newSaving">+ קופת חיסכון חדשה</button>
@@ -524,13 +529,19 @@ function save() {
 
 /* ---------------- מקורות תשלום ---------------- */
 const SRC = {
-  credit: { n: 'אשראי',  e: '💳', s: 'כרטיס ב׳ — מחויב ב-10' },
-  debit:  { n: 'דביט',   e: '⚡', s: 'כרטיס א׳ — יורד מיד' },
-  bank:   { n: 'עו״ש',   e: '🏦', s: 'העברה / הוראת קבע' },
-  cash:   { n: 'מזומן',  e: '💵', s: '' }
+  credit: { n: 'אשראי',  e: '💳' },
+  debit:  { n: 'דביט',   e: '⚡' },
+  bank:   { n: 'עו״ש',   e: '🏦' },
+  cash:   { n: 'מזומן',  e: '💵' }
 };
 const SRC_KEYS = ['credit', 'debit', 'bank', 'cash'];
 function srcName(k) { return (SRC[k] || SRC.bank).n; }
+function srcHint(k) {
+  if (k === 'credit') return 'כרטיס ב׳ — מחויב ב-' + S.settings.ccChargeDay + ' לחודש';
+  if (k === 'debit')  return 'כרטיס א׳ — יורד מיד מהעו״ש';
+  if (k === 'bank')   return 'העברה / הוראת קבע — יורד מיד';
+  return 'יצא מהכיס';
+}
 
 /* ---------------- תאריכים ---------------- */
 function todayISO() { return toISO(new Date()); }
@@ -585,6 +596,8 @@ function chargeDate(t) {
   const d = fromISO(t.date);
   let y = d.getFullYear(), m = d.getMonth();
   if (d.getDate() > S.settings.ccCloseDay) m++;
+  // יום חיוב שאינו מאוחר מיום הסגירה חייב ליפול בחודש שאחרי, אחרת החיוב מקדים את הקנייה
+  if (S.settings.ccChargeDay <= S.settings.ccCloseDay) m++;
   m += num(t.ccShift || 0);
   const x = new Date(y, m, 1);
   x.setDate(Math.min(S.settings.ccChargeDay, dim(x.getFullYear(), x.getMonth())));
@@ -594,10 +607,15 @@ function chargeDate(t) {
 function isBorderline(t) {
   if (!t || t.src !== 'credit') return false;
   const dd = fromISO(t.date).getDate(), c = S.settings.ccCloseDay;
-  return dd >= c - 1 && dd <= c + 1;
+  return dd >= c - 2 && dd <= c + 1;   // הסגירה בפועל נעה בין 6 ל-9
 }
 /** לאיזה כיוון אפשר להזיז עסקה גבולית */
-function altShift(t) { return fromISO(t.date).getDate() <= S.settings.ccCloseDay ? 1 : -1; }
+/** ההזזה היא מתג: או שהעסקה במקום הטבעי שלה, או שהיא הועברה. לחיצה שנייה מחזירה. */
+function toggledShift(t) {
+  if (num(t.ccShift)) return 0;
+  return fromISO(t.date).getDate() <= S.settings.ccCloseDay ? 1 : -1;
+}
+function altOf(t) { return { src: 'credit', date: t.date, ccShift: toggledShift(t) }; }
 
 /** תאריך החיוב הקרוב */
 function nextChargeDate() {
@@ -614,6 +632,69 @@ function pendingCredit() {
   return S.tx.filter(x => x.type === 'expense' && x.src === 'credit' &&
     x.date >= o && x.date <= t && chargeDate(x) > t).reduce((a, x) => a + num(x.amount), 0);
 }
+/* ---------------- הגנה מספירה כפולה ---------------- */
+const CARD_WORDS = ['אשראי', 'כרטיס', 'ויזה', 'visa', 'מאסטרקארד', 'מסטרקארד', 'mastercard',
+  'ישראכרט', 'isracard', 'כאל', 'cal', 'מקס', 'max', 'דיינרס', 'diners', 'אמריקן', 'amex',
+  'לאומי קארד', 'לאומיקארד', 'חיוב חודשי', 'חיוב כרטיס'];
+
+/** סכום כל מחזור חיוב, לפי תאריך הירידה בפועל */
+function chargeTotals(skipId) {
+  const m = {};
+  S.tx.forEach(t => {
+    if (t.id === skipId) return;
+    if (t.type !== 'expense' || (t.src || 'credit') !== 'credit') return;
+    const d = chargeDate(t);
+    m[d] = (m[d] || 0) + num(t.amount);
+  });
+  return m;
+}
+/** האם התנועה הזו נראית כמו חיוב הכרטיס עצמו — שכבר נרשם קנייה-קנייה */
+function cardChargeSuspicion(o) {
+  if (!o || o.type === 'income') return null;
+  const reasons = [];
+  const title = (o.title || '').toLowerCase();
+  // מילים קצרות (max, cal, מקס, כאל) נבדקות כמילה שלמה, אחרת הן תופסות חלקי מילים
+  const toks = title.split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+  const word = CARD_WORDS.find(w => w.length <= 4 ? toks.includes(w) : title.includes(w));
+  if (word) reasons.push('השם מכיל <b>״' + word + '״</b>');
+
+  const amt = num(o.amount);
+  const day = fromISO(o.date).getDate();
+  const nearDay = Math.abs(day - S.settings.ccChargeDay) <= 2;
+  if (nearDay) reasons.push('התאריך צמוד ליום החיוב (' + S.settings.ccChargeDay + ' לחודש)');
+
+  let amtHit = false;
+  if (amt > 0) {
+    const tol = Math.max(60, amt * 0.08);
+    const totals = chargeTotals(o.skipId);
+    for (const dt in totals) {
+      if (Math.abs(fromISO(dt) - fromISO(o.date)) > 6 * 864e5) continue;
+      if (Math.abs(totals[dt] - amt) <= tol) {
+        const cd = fromISO(dt);
+        reasons.push('הסכום כמעט זהה למחזור החיוב של ' + p2(cd.getDate()) + '/' + p2(cd.getMonth() + 1) +
+          ' (<b class="num">' + money(totals[dt]).replace('−', '') + '</b>)');
+        amtHit = true;
+        break;
+      }
+    }
+  }
+  // מילה חד-משמעית ("אשראי", "ישראכרט") מספיקה לבדה.
+  // מילה קצרה ועמומה ("מקס", "cal") צריכה חיזוק — אחרת חנות בשם מקס סטוק תדליק אזהרה.
+  const strong = (word && word.length > 4) || (word && (nearDay || amtHit)) || (nearDay && amtHit);
+  return strong ? reasons : null;
+}
+function openCardWarn(reasons, what) {
+  openSheet('<h3>⚠️ זה נראה כמו חיוב כרטיס אשראי</h3>' +
+    '<p class="lead">ההוצאות שקנית באשראי כבר נרשמו ביום הקנייה. אם תרשום גם את החיוב החודשי עצמו, ' +
+    'כל החודש ייספר פעמיים והיתרה תרד בכפול.</p>' +
+    '<div class="card" style="background:var(--bg);box-shadow:none;line-height:1.9">' +
+    '<div class="tiny b muted" style="margin-bottom:4px">מה שזיהיתי:</div>' +
+    reasons.map(r => '<div>· ' + r + '</div>').join('') + '</div>' +
+    '<div class="tiny muted mt-s">אם זו באמת הוראת קבע נפרדת שבמקרה יורדת באותו יום — תמשיך, זה בסדר גמור.</div>' +
+    '<button class="btn danger mt" data-act="cardProceed">להמשיך בכל זאת</button>' +
+    '<button class="btn ghost mt-s" data-act="closeSheet">ביטול</button>');
+}
+
 /** מה שיירד בחיוב הקרוב */
 function dueNextCharge() {
   const nc = nextChargeDate();
@@ -622,7 +703,7 @@ function dueNextCharge() {
     .reduce((a, x) => a + num(x.amount), 0);
 }
 /** המספר שמשווים מולו לאפליקציית הבנק */
-function bankExpected() { return balanceAsOf(todayISO()) + pendingCredit(); }
+function bankExpected() { return balanceAsOf(todayISO()) + pendingCredit() + reservedVirtual(todayISO()); }
 
 /* ---------------- כסף ---------------- */
 function money(n, sign) {
@@ -665,10 +746,24 @@ function savingsTotal() {
   for (const t of S.tx) if (t.saving) b += (t.type === 'expense' ? 1 : -1) * num(t.amount);
   return b;
 }
-function savingBalance(id) {
+function savingBalance(id, asOf) {
   let b = 0;
-  for (const t of S.tx) if (t.saving === id) b += (t.type === 'expense' ? 1 : -1) * num(t.amount);
+  for (const t of S.tx) {
+    if (t.saving !== id) continue;
+    if (asOf && t.date > asOf) continue;
+    b += (t.type === 'expense' ? 1 : -1) * num(t.amount);
+  }
   return b;
+}
+const KINDS = {
+  virtual:  { n: 'מעטפה וירטואלית', e: '🔒', s: 'הכסף פיזית באותו חשבון — רק משוריין' },
+  separate: { n: 'חשבון נפרד',      e: '🏦', s: 'הכסף באמת עבר לחשבון אחר' }
+};
+function savingKind(s) { return (s && s.kind === 'separate') ? 'separate' : 'virtual'; }
+/** כסף שסימנתי כמשוריין אבל פיזית עדיין יושב בבנק — לכן חוזר ל״צפוי בבנק״ */
+function reservedVirtual(asOf) {
+  return S.savings.filter(s => savingKind(s) === 'virtual')
+    .reduce((a, s) => a + savingBalance(s.id, asOf), 0);
 }
 function catById(id) { return S.categories.find(c => c.id === id); }
 function catName(id) { const c = catById(id); return c ? c.name : 'ללא קטגוריה'; }
@@ -974,6 +1069,7 @@ function renderTx() {
   let list = S.tx.filter(t => inRange(t.date, r.from, r.to));
   if (!S.settings.showIncome) list = list.filter(t => t.type !== 'income');
   if (S.settings.filterCat) list = list.filter(t => t.cat === S.settings.filterCat);
+  if (S.settings.filterSrc) list = list.filter(t => (t.src || 'credit') === S.settings.filterSrc);
   const q = ($('#tx-search').value || '').trim().toLowerCase();
   if (q) list = list.filter(t => (t.title || '').toLowerCase().includes(q) || (t.note || '').toLowerCase().includes(q));
 
@@ -1124,12 +1220,19 @@ function renderIncome() {
 /* ============================ חסכונות ============================ */
 function renderSavings() {
   animateNum($('#sv-total'), savingsTotal(), money);
+  const virt = reservedVirtual(todayISO());
+  const sep = savingsTotal() - virt;
+  $('#sv-split').innerHTML = S.savings.length
+    ? '🔒 משוריין בחשבון: ' + money(virt).replace('−', '') + ' · 🏦 בחשבון נפרד: ' + money(sep).replace('−', '')
+    : 'הפקדה מורידה מהיתרה, משיכה מחזירה אליה.';
   $('#sv-list').innerHTML = S.savings.map(s => {
     const b = savingBalance(s.id), t = num(s.target);
     const pct = t > 0 ? Math.min(b / t * 100, 100) : 0;
+    const k = savingKind(s);
     return '<div class="card" style="margin-bottom:10px">' +
       '<div class="between"><button class="b" data-editsav="' + s.id + '">' + s.emoji + ' ' + esc(s.name) + '</button>' +
       '<b class="num" style="font-size:19px">' + money(b) + '</b></div>' +
+      '<div class="tiny mt-s"><span class="tag">' + KINDS[k].e + ' ' + KINDS[k].n + '</span></div>' +
       (t > 0 ? '<div class="bar" style="height:7px;border-radius:7px;background:var(--line);margin-top:9px;overflow:hidden">' +
         '<i style="display:block;height:100%;width:0;background:var(--green);border-radius:7px" data-w="' + pct + '"></i></div>' +
         '<div class="tiny muted mt-s num">יעד ' + money(t) + ' · ' + Math.round(pct) + '%</div>' : '') +
@@ -1264,10 +1367,10 @@ function chargeLine() {
   const cd = fromISO(chargeDate(t));
   let s = '💳 יירד מהבנק ב-<b>' + p2(cd.getDate()) + '/' + p2(cd.getMonth() + 1) + '/' + cd.getFullYear() + '</b>';
   if (isBorderline(t)) {
-    const alt = { src: 'credit', date: F.date, ccShift: t.ccShift + altShift(t) };
-    const ad = fromISO(chargeDate(alt));
+    const ad = fromISO(chargeDate(altOf(t)));
     s += '<br><span class="pos">עסקה גבולית</span> — הבנק מזיז את הסגירה לפי ימי עסקים. ' +
-      '<button class="b" style="color:var(--p)" data-act="flowShift">העבר ל-' + p2(ad.getDate()) + '/' + p2(ad.getMonth() + 1) + ' ›</button>';
+      '<button class="b" style="color:var(--p)" data-act="flowShift">' +
+      (num(t.ccShift) ? 'החזר ל-' : 'העבר ל-') + p2(ad.getDate()) + '/' + p2(ad.getMonth() + 1) + ' ›</button>';
   }
   return s;
 }
@@ -1294,6 +1397,10 @@ function flowNext() {
   saveFlow();
 }
 function saveFlow() {
+  if (!F.ackCard) {
+    const susp = cardChargeSuspicion({ type: F.type, title: F.title, amount: F.amount, date: F.date, skipId: F.editId });
+    if (susp) { SH.cardAction = () => { F.ackCard = true; saveFlow(); }; openCardWarn(susp); return; }
+  }
   if (F.editId) {
     const t = S.tx.find(x => x.id === F.editId);
     if (t) Object.assign(t, { type: F.type, title: F.title, amount: F.amount, cat: F.cat, date: F.date,
@@ -1341,17 +1448,17 @@ function chargeBox(t) {
   let s = '<div class="eyebrow mt">שולם מ:</div><div class="chips">' +
     SRC_KEYS.map(k => '<button class="pill ' + (cur === k ? 'on' : '') + '" data-setsrc="' + k + '" data-txid="' + t.id + '">' +
       SRC[k].e + ' ' + SRC[k].n + '</button>').join('') + '</div>';
-  if (t.srcAuto) s += '<div class="tiny mt-s" style="color:var(--p)">שויך אוטומטית — שווה לאשר.</div>';
+  s += '<div class="tiny muted mt-s">' + srcHint(cur) + '</div>';
+  if (t.srcAuto) s += '<div class="tiny" style="color:var(--p)">שויך אוטומטית — שווה לאשר.</div>';
   if (cur === 'credit') {
     const cd = fromISO(chargeDate(t)), done = chargeDate(t) <= todayISO();
     s += '<div class="sm muted mt-s" style="line-height:1.7">💳 ' + (done ? 'ירד' : 'יירד') + ' מהבנק ב-<b>' +
       p2(cd.getDate()) + '/' + p2(cd.getMonth() + 1) + '/' + cd.getFullYear() + '</b>';
     if (isBorderline(t)) {
-      const alt = { src: 'credit', date: t.date, ccShift: (num(t.ccShift) || 0) + altShift(t) };
-      const ad = fromISO(chargeDate(alt));
+      const ad = fromISO(chargeDate(altOf(t)));
       s += '<br><span class="pos">עסקה גבולית</span> — ' +
-        '<button class="b" style="color:var(--p)" data-shifttx="' + t.id + '">העבר ל-' +
-        p2(ad.getDate()) + '/' + p2(ad.getMonth() + 1) + ' ›</button>';
+        '<button class="b" style="color:var(--p)" data-shifttx="' + t.id + '">' +
+        (num(t.ccShift) ? 'החזר ל-' : 'העבר ל-') + p2(ad.getDate()) + '/' + p2(ad.getMonth() + 1) + ' ›</button>';
     }
     s += '</div>';
   }
@@ -1418,7 +1525,7 @@ function editRec(id, draft) {
     id: '', type: 'expense', title: '', amount: '', cat: '', day: new Date().getDate(),
     freq: 'monthly', count: '', mode: 'each', startDate: todayISO(), active: true
   });
-  SH.rec = r;
+  SH.rec = r; SH.recAck = false;
   const isNew = !id, isIn = r.type === 'income', weekly = r.freq === 'weekly';
   openSheet('<h3>' + (isNew ? 'קבועה חדשה' : 'עריכת קבועה') + '</h3>' +
     '<p class="lead">' + (isIn ? 'נכנסת אוטומטית בכל מחזור.' : 'נרשמת אוטומטית בכל מחזור.') + '</p>' +
@@ -1465,10 +1572,16 @@ function editQuick(id) {
     (isNew ? '' : '<button class="btn danger mt-s" data-delquick="' + id + '">מחיקה</button>'));
 }
 function editSaving(id) {
-  const s = S.savings.find(x => x.id === id) || { id: '', name: '', emoji: '💰', target: '' };
+  const s = S.savings.find(x => x.id === id) || { id: '', name: '', emoji: '💰', target: '', kind: 'virtual' };
   const isNew = !id;
+  const k = SH.savKind || savingKind(s);
+  SH.savKind = k;
   openSheet('<h3>' + (isNew ? 'קופת חיסכון חדשה' : 'עריכת קופה') + '</h3>' +
     '<div class="field"><label>שם</label><input class="inp" id="s-name" value="' + esc(s.name) + '" placeholder="למשל: חופשה"></div>' +
+    '<div class="field"><label>איפה הכסף באמת נמצא</label><div class="chips">' +
+      Object.keys(KINDS).map(x => '<button class="pill ' + (k === x ? 'on' : '') + '" data-savkind="' + x + '">' +
+        KINDS[x].e + ' ' + KINDS[x].n + '</button>').join('') + '</div>' +
+      '<div class="tiny muted mt-s">' + KINDS[k].s + '</div></div>' +
     '<div class="field"><label>אימוג׳י</label>' + emojiGrid(s.emoji) + '</div>' +
     '<div class="field"><label>יעד (₪, אופציונלי)</label><input class="inp" id="s-target" type="number" value="' + (num(s.target) || '') + '"></div>' +
     '<button class="btn mt" data-savesav="' + (id || 'new') + '">שמירה</button>' +
@@ -1477,8 +1590,12 @@ function editSaving(id) {
 }
 function moveSaving(id, dir) {
   const s = S.savings.find(x => x.id === id); if (!s) return;
+  const kk = savingKind(s);
   openSheet('<h3>' + (dir === 'in' ? 'הפקדה ל' : 'משיכה מ') + esc(s.name) + '</h3>' +
-    '<p class="lead">' + (dir === 'in' ? 'הכסף יורד מהיתרה ונכנס לקופה.' : 'הכסף חוזר ליתרה.') + '</p>' +
+    '<p class="lead">' + KINDS[kk].e + ' ' + KINDS[kk].n + ' — ' +
+    (kk === 'virtual'
+      ? (dir === 'in' ? 'יורד מ״היתרה שלי״, לא מ״צפוי בבנק״.' : 'חוזר ל״היתרה שלי״.')
+      : (dir === 'in' ? 'יורד משני המספרים — הכסף באמת עוזב את החשבון.' : 'חוזר לשני המספרים.')) + '</p>' +
     '<div class="field"><label>סכום (₪)</label><input class="inp" id="m-amount" type="number" inputmode="decimal" autofocus></div>' +
     '<div class="field"><label>תאריך</label><input class="inp" id="m-date" type="date" value="' + todayISO() + '"></div>' +
     '<button class="btn mt" data-domove="' + id + '" data-dir="' + dir + '">אישור</button>');
@@ -1491,6 +1608,71 @@ function anchorPreview() {
   box.innerHTML = 'מ-' + p2(dd.getDate()) + '/' + p2(dd.getMonth() + 1) + '/' + dd.getFullYear() +
     ' ועד היום נרשמו תנועות של <b class="num">' + money(net, true) + '</b>,<br>' +
     'אז היתרה שתוצג עכשיו: <b class="num ' + (bal + net < 0 ? 'neg' : 'pos') + '">' + money(bal + net) + '</b>';
+}
+/** מריץ חישוב עם הגדרות חלופיות בלי להחיל אותן */
+function withSettings(s, fn) {
+  const old = S.settings;
+  S.settings = s;
+  try { return fn(); } finally { S.settings = old; }
+}
+function applySettings(n) {
+  Object.assign(S.settings, n);
+  snapAnchor();
+  save(); closeSheet(); render(); toast('נשמר');
+}
+function confirmSettings(n) {
+  const before = { d: S.settings.openingDate, b: balanceAsOf(todayISO()) };
+  const cand = Object.assign({}, S.settings, n);
+  cand.openingDate = withSettings(cand, () => cycleStartISO(cand.openingDate));
+  const after = withSettings(cand, () => balanceAsOf(todayISO()));
+  if (cand.openingDate === before.d && Math.round(after) === Math.round(before.b)) { applySettings(n); return; }
+  SH.pendingSettings = n;
+  const od = fromISO(before.d), nd = fromISO(cand.openingDate);
+  const fmt = x => p2(x.getDate()) + '/' + p2(x.getMonth() + 1) + '/' + x.getFullYear();
+  openSheet('<h3>רגע — זה יזיז לך את היתרה</h3>' +
+    '<p class="lead">שינוי יום תחילת המחזור מזיז את נקודת הכניסה, ולכן משנה כמה תנועות נספרות מאז.</p>' +
+    '<div class="card" style="background:var(--bg);box-shadow:none;line-height:1.9">' +
+    (cand.openingDate !== before.d
+      ? '<div class="between"><span class="muted">נקודת הכניסה</span><b>' + fmt(od) + ' → ' + fmt(nd) + '</b></div>' : '') +
+    '<div class="between"><span class="muted">היתרה המוצגת</span><b class="num">' +
+      money(before.b) + ' → <span class="' + (after < 0 ? 'neg' : 'pos') + '">' + money(after) + '</span></b></div>' +
+    '<div class="between"><span class="muted">הפרש</span><b class="num ' + (after - before.b < 0 ? 'neg' : 'pos') + '">' +
+      money(after - before.b, true) + '</b></div></div>' +
+    '<div class="tiny muted mt-s">הסכום של נקודת הכניסה עצמו לא משתנה — רק התאריך שאליו הוא מוצמד.</div>' +
+    '<button class="btn mt" data-act="settingsConfirm">אשר ושמור</button>' +
+    '<button class="btn ghost mt-s" data-act="closeSheet">ביטול</button>');
+}
+function commitRec(id, o) {
+  if (id === 'new') S.recurring.push(Object.assign({ id: uid(), active: true, done: 0, lastRun: null }, o));
+  else Object.assign(S.recurring.find(x => x.id === id), o);
+  SH.recAck = false;
+  runRecurring(); save(); closeSheet(); render(); toast('נשמר');
+}
+function commitSaving(id, o) {
+  if (id === 'new') S.savings.push(Object.assign({ id: uid() }, o));
+  else Object.assign(S.savings.find(x => x.id === id), o);
+  SH.savKind = null; SH.savId = null;
+  save(); closeSheet(); render();
+}
+/** שינוי סיווג של קופה קיימת מזיז את ״צפוי בבנק״ רטרואקטיבית — מראים בכמה */
+function confirmKind(id, o, was, now, bal) {
+  const before = bankExpected();
+  const delta = (now === 'virtual' ? 1 : -1) * bal;
+  SH.kindAction = () => commitSaving(id, o);
+  openSheet('<h3>הסיווג משפיע אחורה</h3>' +
+    '<p class="lead">הסיווג הוא תכונה של הקופה, לא של כל הפקדה בנפרד. שינוי שלו חל על ' +
+    '<b>כל ההפקדות שכבר רשמת</b> בקופה הזו.</p>' +
+    '<div class="card" style="background:var(--bg);box-shadow:none;line-height:1.9">' +
+    '<div class="between"><span class="muted">הסיווג</span><b>' + KINDS[was].e + ' ' + KINDS[was].n +
+      ' → ' + KINDS[now].e + ' ' + KINDS[now].n + '</b></div>' +
+    '<div class="between"><span class="muted">בקופה</span><b class="num">' + money(bal).replace('−', '') + '</b></div>' +
+    '<div class="between"><span class="muted">צפוי בבנק</span><b class="num">' + money(before) +
+      ' → <span class="' + (before + delta < 0 ? 'neg' : 'pos') + '">' + money(before + delta) + '</span></b></div>' +
+    '<div class="between"><span class="muted">הפרש</span><b class="num ' + (delta < 0 ? 'neg' : 'pos') + '">' +
+      money(delta, true) + '</b></div></div>' +
+    '<div class="tiny muted mt-s">״היתרה שלי״ לא משתנה — הכסף כבר לא פנוי בשני המקרים.</div>' +
+    '<button class="btn mt" data-act="kindConfirm">אשר ושמור</button>' +
+    '<button class="btn ghost mt-s" data-act="closeSheet">ביטול</button>');
 }
 function needReview() { return S.tx.filter(t => t.srcAuto && t.type === 'expense' && !t.saving); }
 function openReview() {
@@ -1558,16 +1740,24 @@ function openRecInFlow() {
 }
 function openFilter() {
   openSheet('<h3>סינון</h3><div class="field"><label>קטגוריה</label>' + catOptions(S.settings.filterCat) + '</div>' +
+    '<div class="field"><label>אמצעי תשלום</label><select class="inp" id="f-src">' +
+    '<option value="">— הכל —</option>' +
+    SRC_KEYS.map(k => '<option value="' + k + '"' + (S.settings.filterSrc === k ? ' selected' : '') + '>' +
+      SRC[k].e + ' ' + SRC[k].n + '</option>').join('') + '</select></div>' +
     '<button class="btn mt" data-act="applyFilter">החל</button>' +
     '<button class="btn ghost mt-s" data-act="clearFilter">ניקוי סינון</button>');
 }
 
 /* ============================ ייצוא ============================ */
 function exportCSV() {
-  const rows = [['תאריך', 'סוג', 'שם', 'קטגוריה', 'סכום', 'אמצעי תשלום', 'הערה', 'נספר בתקציב']];
+  const rows = [['תאריך', 'סוג', 'שם', 'קטגוריה', 'סכום', 'מקור תשלום', 'תאריך חיוב בפועל',
+    'הועבר ידנית', 'אמצעי', 'הערה', 'נספר בתקציב']];
   S.tx.slice().sort((a, b) => a.date.localeCompare(b.date)).forEach(t => {
-    rows.push([t.date, t.type === 'income' ? 'הכנסה' : 'הוצאה', t.title || '', t.saving ? 'חיסכון' : catName(t.cat),
-      num(t.amount), t.method || '', t.note || '', t.excluded ? 'לא' : 'כן']);
+    const src = t.src || (t.type === 'income' ? 'bank' : 'credit');
+    rows.push([t.date, t.type === 'income' ? 'הכנסה' : 'הוצאה', t.title || '',
+      t.saving ? 'חיסכון' : catName(t.cat), num(t.amount), src,
+      t.type === 'expense' ? chargeDate(t) : t.date,
+      num(t.ccShift) ? 'כן' : '', t.method || '', t.note || '', t.excluded ? 'לא' : 'כן']);
   });
   const csv = '\uFEFF' + rows.map(r => r.map(c => '"' + String(c).replace(/"/g, '""') + '"').join(',')).join('\n');
   download('hayitra-' + todayISO() + '.csv', csv, 'text/csv;charset=utf-8');
@@ -1583,7 +1773,7 @@ function download(name, content, type) {
 
 /* ============================ אירועים ============================ */
 document.addEventListener('click', e => {
-  const el = e.target.closest('[data-go],[data-cyc],[data-act],[data-src],[data-setsrc],[data-shifttx],[data-bulksrc],[data-tx],[data-editcat],[data-goal],[data-editrec],[data-editquick],[data-editsav],[data-dep],[data-wd],[data-quick],[data-freq],[data-amt],[data-method],[data-pickcat],[data-emo],[data-rtype],[data-rmode],[data-rsrc],[data-savecat],[data-delcat],[data-saverec],[data-delrec],[data-savequick],[data-delquick],[data-savesav],[data-delsav],[data-domove],[data-edittx],[data-deltx],[data-v],[data-toggle]');
+  const el = e.target.closest('[data-go],[data-cyc],[data-act],[data-src],[data-setsrc],[data-shifttx],[data-bulksrc],[data-tx],[data-editcat],[data-goal],[data-editrec],[data-editquick],[data-editsav],[data-dep],[data-wd],[data-quick],[data-freq],[data-amt],[data-method],[data-pickcat],[data-emo],[data-rtype],[data-rmode],[data-rsrc],[data-savecat],[data-delcat],[data-saverec],[data-delrec],[data-savequick],[data-delquick],[data-savesav],[data-savkind],[data-delsav],[data-domove],[data-edittx],[data-deltx],[data-v],[data-toggle]');
   if (!el) return;
   const d = el.dataset;
 
@@ -1617,7 +1807,7 @@ document.addEventListener('click', e => {
   if (d.src) { stash(); F.src = d.src; F.ccShift = 0; drawFlow(); return; }
   if (d.act === 'flowShift') {
     stash();
-    F.ccShift = (num(F.ccShift) || 0) + altShift({ src: 'credit', date: F.date, ccShift: num(F.ccShift) || 0 });
+    F.ccShift = toggledShift({ date: F.date, ccShift: num(F.ccShift) || 0 });
     drawFlow(); return;
   }
   if (d.act === 'flowMulti') { stash(); F.multi = !F.multi; drawFlow(); return; }
@@ -1660,8 +1850,8 @@ document.addEventListener('click', e => {
   if (d.editrec) { SH.recId = d.editrec; editRec(d.editrec); return; }
   if (d.act === 'newQuick') { editQuick(''); return; }
   if (d.editquick) { editQuick(d.editquick); return; }
-  if (d.act === 'newSaving') { editSaving(''); return; }
-  if (d.editsav) { editSaving(d.editsav); return; }
+  if (d.act === 'newSaving') { SH.savKind = 'virtual'; SH.savId = ''; editSaving(''); return; }
+  if (d.editsav) { SH.savKind = null; SH.savId = d.editsav; editSaving(d.editsav); return; }
   if (d.dep) { moveSaving(d.dep, 'in'); return; }
   if (d.wd) { moveSaving(d.wd, 'out'); return; }
   if (d.act === 'settings') { openSettings(); return; }
@@ -1670,8 +1860,12 @@ document.addEventListener('click', e => {
   if (d.act === 'search') { const i = $('#tx-search'); i.classList.toggle('hide'); if (!i.classList.contains('hide')) i.focus(); return; }
   if (d.act === 'sort') { S.settings.sort = S.settings.sort === 'date' ? 'amount' : 'date'; save(); toast(S.settings.sort === 'date' ? 'מיון לפי תאריך' : 'מיון לפי סכום'); render(); return; }
   if (d.act === 'filter') { openFilter(); return; }
-  if (d.act === 'applyFilter') { S.settings.filterCat = $('#f-cat').value; save(); closeSheet(); render(); return; }
-  if (d.act === 'clearFilter') { S.settings.filterCat = ''; save(); closeSheet(); render(); return; }
+  if (d.act === 'applyFilter') {
+    S.settings.filterCat = $('#f-cat').value;
+    S.settings.filterSrc = $('#f-src') ? $('#f-src').value : '';
+    save(); closeSheet(); render(); return;
+  }
+  if (d.act === 'clearFilter') { S.settings.filterCat = ''; S.settings.filterSrc = ''; save(); closeSheet(); render(); return; }
 
   if (d.emo) {
     $$('#emo button').forEach(b => b.classList.toggle('on', b === el));
@@ -1723,9 +1917,10 @@ document.addEventListener('click', e => {
       startDate: snapStart(r.startDate || todayISO(), num(r.day) || 1, r.freq)
     };
     if (!o.title || !(o.amount > 0)) { toast('צריך שם וסכום'); return; }
-    if (d.saverec === 'new') S.recurring.push(Object.assign({ id: uid(), active: true, done: 0, lastRun: null }, o));
-    else Object.assign(S.recurring.find(x => x.id === d.saverec), o);
-    runRecurring(); save(); closeSheet(); render(); toast('נשמר'); return;
+    const synth = snapStart(todayISO(), o.day, o.freq);
+    const susp = SH.recAck ? null : cardChargeSuspicion({ type: o.type, title: o.title, amount: o.amount, date: synth });
+    if (susp) { SH.cardAction = () => { SH.recAck = true; commitRec(d.saverec, o); }; openCardWarn(susp, 'קבועה'); return; }
+    commitRec(d.saverec, o); return;
   }
   if (d.delrec) {
     if (!confirm('למחוק את הקבועה?')) return;
@@ -1740,12 +1935,18 @@ document.addEventListener('click', e => {
     save(); closeSheet(); render(); return;
   }
   if (d.delquick) { S.quick = S.quick.filter(q => q.id !== d.delquick); save(); closeSheet(); render(); return; }
+  if (d.savkind) { SH.savKind = d.savkind; editSaving(SH.savId || ''); return; }
   if (d.savesav !== undefined) {
-    const o = { name: ($('#s-name').value || '').trim(), emoji: SH.emo || '💰', target: num($('#s-target').value) };
+    const o = { name: ($('#s-name').value || '').trim(), emoji: SH.emo || '💰',
+      target: num($('#s-target').value), kind: SH.savKind || 'virtual' };
     if (!o.name) { toast('צריך שם'); return; }
-    if (d.savesav === 'new') S.savings.push(Object.assign({ id: uid() }, o));
-    else Object.assign(S.savings.find(x => x.id === d.savesav), o);
-    save(); closeSheet(); render(); return;
+    if (d.savesav !== 'new') {
+      const cur = S.savings.find(x => x.id === d.savesav);
+      const was = savingKind(cur), now = o.kind;
+      const bal = savingBalance(cur.id, todayISO());
+      if (was !== now && Math.round(bal) !== 0) { confirmKind(cur.id, o, was, now, bal); return; }
+    }
+    commitSaving(d.savesav, o); return;
   }
   if (d.delsav) {
     if (!confirm('למחוק את הקופה? תנועות ההפקדה יישארו בהיסטוריה.')) return;
@@ -1778,9 +1979,11 @@ document.addEventListener('click', e => {
     save(); closeSheet(); render(); toast('אושר'); return;
   }
   if (d.act === 'review') { openReview(); return; }
+  if (d.act === 'kindConfirm') { const fn = SH.kindAction; SH.kindAction = null; if (fn) fn(); return; }
+  if (d.act === 'cardProceed') { const fn = SH.cardAction; SH.cardAction = null; closeSheet(); if (fn) fn(); return; }
   if (d.shifttx) {
     const t = S.tx.find(x => x.id === d.shifttx);
-    if (t) { t.ccShift = (num(t.ccShift) || 0) + altShift(t); save(); editTx(t.id); render(); }
+    if (t) { t.ccShift = toggledShift(t); save(); editTx(t.id); render(); }
     return;
   }
   if (d.edittx) {
@@ -1795,15 +1998,17 @@ document.addEventListener('click', e => {
     save(); closeSheet(); render(); toast('נמחק'); return;
   }
   if (d.act === 'saveSettings') {
-    S.settings.name = ($('#st-name').value || '').trim();
-    S.settings.cycleStartDay = Math.min(28, Math.max(1, num($('#st-day').value) || 1));
-    if ($('#st-close')) S.settings.ccCloseDay = Math.min(28, Math.max(1, num($('#st-close').value) || 8));
-    if ($('#st-charge')) S.settings.ccChargeDay = Math.min(28, Math.max(1, num($('#st-charge').value) || 10));
-    S.settings.openingBalance = num($('#st-bal').value);
-    S.settings.openingDate = $('#st-date') ? $('#st-date').value || todayISO() : todayISO();
-    snapAnchor();
-    save(); closeSheet(); render(); toast('נשמר'); return;
+    const n = {
+      name: ($('#st-name').value || '').trim(),
+      cycleStartDay: Math.min(28, Math.max(1, num($('#st-day').value) || 1)),
+      openingBalance: num($('#st-bal').value),
+      openingDate: $('#st-date') ? ($('#st-date').value || todayISO()) : todayISO()
+    };
+    if ($('#st-close')) n.ccCloseDay = Math.min(28, Math.max(1, num($('#st-close').value) || 8));
+    if ($('#st-charge')) n.ccChargeDay = Math.min(28, Math.max(1, num($('#st-charge').value) || 10));
+    confirmSettings(n); return;
   }
+  if (d.act === 'settingsConfirm') { applySettings(SH.pendingSettings || {}); return; }
   if (d.act === 'dlBackup') { download('hayitra-backup-' + todayISO() + '.json', JSON.stringify(S)); return; }
   if (d.act === 'doRestore') {
     try {
